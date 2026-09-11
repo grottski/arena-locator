@@ -5,6 +5,10 @@
   const MAX_POINTS = 20; // 5 rounds × 20 = 100
   const SCORE_SCALE_KM = 1500; // points = 20 * e^(-km / 1500), rounded
   const RECENT_KEY = "arena-locator:recent";
+  const DAILY_KEY = "arena-locator:daily";
+  const SITE_URL = "https://arenalocator.lol";
+  // Daily #1 is 10 Sep 2026. Days follow each player's local calendar, like Wordle.
+  const DAILY_EPOCH = Date.UTC(2026, 8, 10);
   // Every round opens on this exact view so the globe never hints at the answer.
   const START_VIEW = { lat: 20, lng: 0, altitude: 2.4 };
   const MAX_ZOOM = 24;
@@ -21,8 +25,11 @@
 
   const $ = (id) => document.getElementById(id);
   const stadiums = window.STADIUMS || [];
+  const byId = new Map(stadiums.map((s) => [s.id, s]));
 
   const state = {
+    mode: "practice", // or "daily"
+    day: 0,
     sport: "all",
     rounds: [],
     index: 0,
@@ -55,27 +62,29 @@
   const pointsFor = (km) => (km < 0.5 ? MAX_POINTS : Math.round(MAX_POINTS * Math.exp(-km / SCORE_SCALE_KM)));
   const fmtKm = (km) => (km < 1 ? `${Math.round(km * 1000)} m` : `${Math.round(km).toLocaleString()} km`);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-  const shuffle = (arr) => {
+  const sum = (arr) => arr.reduce((t, n) => t + n, 0);
+  const shuffle = (arr, rand = Math.random) => {
     const a = arr.slice();
     for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(rand() * (i + 1));
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
   };
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const pick = (arr, rand = Math.random) => arr[Math.floor(rand() * arr.length)];
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-  function loadRecent() {
-    try { return new Set(JSON.parse(localStorage.getItem(RECENT_KEY) || "[]")); } catch { return new Set(); }
+  // ---------- storage ----------
+  function readJSON(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
   }
-  function saveRecent(ids) {
-    try {
-      const prev = [...loadRecent()];
-      localStorage.setItem(RECENT_KEY, JSON.stringify([...prev, ...ids].slice(-60)));
-    } catch { /* storage unavailable */ }
+  function writeJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
   }
+  const loadRecent = () => new Set(readJSON(RECENT_KEY, []));
+  const saveRecent = (ids) => writeJSON(RECENT_KEY, [...loadRecent(), ...ids].slice(-60));
 
+  // ---------- rounds ----------
   // Round N draws from difficulty tier N, so the game ramps from famous to obscure.
   function buildRounds(sport) {
     const recent = loadRecent();
@@ -88,6 +97,124 @@
       chosen.push(pick(fresh.length ? fresh : inTier));
     }
     return chosen;
+  }
+
+  // ---------- daily challenge ----------
+  function todayNumber(now = new Date()) {
+    return Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - DAILY_EPOCH) / 864e5) + 1;
+  }
+  function msUntilTomorrow(now = new Date()) {
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    return midnight - now;
+  }
+  const fmtCountdown = (ms) => {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return [Math.floor(s / 3600), Math.floor(s / 60) % 60, s % 60].map((n) => String(n).padStart(2, "0")).join(":");
+  };
+
+  // Small seeded PRNG: the same day number always yields the same puzzle.
+  function mulberry32(seed) {
+    return () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // One stadium per sport, in a daily-shuffled order, tiers 1→5.
+  function dailyRounds(day) {
+    const rand = mulberry32(Math.imul(day, 2654435761));
+    const sports = shuffle(SPORTS.slice(1).map((s) => s.key), rand);
+    return sports.map((sport, r) => {
+      const pool = stadiums
+        .filter((s) => s.sport === sport && s.tier === r + 1)
+        .sort((a, b) => a.id.localeCompare(b.id));
+      return pick(pool, rand);
+    });
+  }
+
+  const dailyStore = () => readJSON(DAILY_KEY, {});
+  const dailyEntry = (day) => dailyStore()[day] || null;
+  function saveDailyEntry(day, entry) {
+    const all = dailyStore();
+    all[day] = entry;
+    writeJSON(DAILY_KEY, all);
+  }
+
+  function dailyStats() {
+    const done = Object.entries(dailyStore())
+      .filter(([, e]) => e.done)
+      .map(([d, e]) => ({ day: +d, score: sum(e.results.map((r) => r.pts)) }));
+    const days = new Set(done.map((d) => d.day));
+    const today = todayNumber();
+    let streak = 0;
+    for (let d = days.has(today) ? today : today - 1; days.has(d); d--) streak++;
+    const scores = done.map((d) => d.score);
+    return {
+      played: done.length,
+      streak,
+      best: scores.length ? Math.max(...scores) : 0,
+      avg: scores.length ? Math.round(sum(scores) / scores.length) : 0,
+    };
+  }
+
+  function renderStats(el) {
+    const s = dailyStats();
+    el.hidden = !s.played;
+    el.innerHTML = [["Played", s.played], ["Streak", s.streak], ["Best", s.best], ["Average", s.avg]]
+      .map(([label, value]) => `<div><strong>${value}</strong><span>${label}</span></div>`).join("");
+  }
+
+  // ---------- sharing ----------
+  const square = (pts) => (pts >= 16 ? "🟩" : pts >= 10 ? "🟨" : pts >= 4 ? "🟧" : "🟥");
+
+  function shareText() {
+    return [
+      `Arena Locator #${state.day} 🏟️ ${state.total}/100`,
+      ...state.results.map((r) => `${ICON[r.stadium.sport]} ${square(r.pts)} ${r.pts}`),
+      SITE_URL,
+    ].join("\n");
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Clipboard API needs HTTPS; fall back to the old selection trick.
+      const ta = Object.assign(document.createElement("textarea"), { value: text, readOnly: true });
+      Object.assign(ta.style, { position: "fixed", opacity: "0" });
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch { /* unsupported */ }
+      ta.remove();
+      return ok;
+    }
+  }
+
+  async function share() {
+    const text = shareText();
+    // Phones get the native share sheet; desktops just copy.
+    if (navigator.share && matchMedia("(pointer: coarse)").matches) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
+    toast((await copyText(text)) ? "Score copied. Paste it anywhere!" : "Couldn't copy. Try again.");
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    $("toast").textContent = msg;
+    $("toast").hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $("toast").hidden = true; }, 2400);
   }
 
   // ---------- photo viewer (zoom + pan) ----------
@@ -340,9 +467,9 @@
     $("globe-hint").textContent = "Click again to move your pin";
   }
 
-  // ---------- flow ----------
+  // ---------- menu ----------
   function show(id) {
-    for (const s of ["start", "game", "final"]) $(s).hidden = s !== id;
+    for (const s of ["menu", "game", "final"]) $(s).hidden = s !== id;
   }
 
   function renderPicker() {
@@ -352,16 +479,74 @@
     }).join("");
   }
 
-  function startGame() {
+  function renderMenu() {
+    const day = todayNumber();
+    const entry = dailyEntry(day);
+    $("daily-title").textContent = `#${day}`;
+    $("daily-date").textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    if (entry?.done) {
+      const score = sum(entry.results.map((r) => r.pts));
+      $("daily-desc").innerHTML = `You scored <strong>${score}/100</strong> today. Next daily in <strong class="countdown"></strong>`;
+      $("daily-btn").textContent = "See results & share";
+    } else if (entry?.results?.length) {
+      $("daily-desc").textContent = `In progress: round ${entry.results.length + 1} of ${ROUNDS}.`;
+      $("daily-btn").textContent = "Continue";
+    } else {
+      $("daily-desc").textContent = "5 stadiums, one per sport, getting harder each round. Same puzzle for everyone today.";
+      $("daily-btn").textContent = "Play today's";
+    }
+    renderStats($("stats"));
+    renderPicker();
+    tickCountdown();
+    show("menu");
+  }
+
+  // Updates every visible countdown, and rolls the menu over at midnight.
+  let renderedDay = todayNumber();
+  function tickCountdown() {
+    const text = fmtCountdown(msUntilTomorrow());
+    document.querySelectorAll(".countdown").forEach((el) => { el.textContent = text; });
+    const day = todayNumber();
+    if (day !== renderedDay) {
+      renderedDay = day;
+      if (!$("menu").hidden) renderMenu();
+    }
+  }
+
+  // ---------- flow ----------
+  function startDaily() {
+    const day = todayNumber();
+    const entry = dailyEntry(day);
+    state.mode = "daily";
+    state.day = day;
+    state.rounds = dailyRounds(day);
+    // Resume a daily in progress (or show the finished one) instead of re-rolling.
+    state.results = (entry?.results || [])
+      .map((r) => ({ stadium: byId.get(r.id), km: r.km, pts: r.pts }))
+      .filter((r) => r.stadium);
+    state.total = sum(state.results.map((r) => r.pts));
+    saveRecent(state.rounds.map((s) => s.id));
+    if (entry?.done) return finish();
+    state.index = state.results.length;
+    enterGame();
+  }
+
+  function startPractice() {
+    state.mode = "practice";
+    state.day = 0;
     state.rounds = buildRounds(state.sport);
     state.index = 0;
     state.total = 0;
     state.results = [];
     saveRecent(state.rounds.map((s) => s.id));
+    enterGame();
+  }
+
+  function enterGame() {
     show("game");
     if (!globe) initGlobe();
     // Warm the cache so later rounds load instantly.
-    state.rounds.forEach((s) => { new Image().src = s.photo; });
+    state.rounds.slice(state.index).forEach((s) => { new Image().src = s.photo; });
     startRound();
   }
 
@@ -376,8 +561,9 @@
     $("guess-btn").textContent = "Place a pin";
     $("globe-hint").hidden = false;
     $("globe-hint").textContent = "Click the globe to drop your pin";
-    $("score").textContent = state.total.toLocaleString();
-    $("round-label").textContent = `Round ${state.index + 1} of ${ROUNDS} · ${TIER_NAMES[s.tier - 1]}`;
+    $("score").textContent = state.total;
+    const mode = state.mode === "daily" ? `Daily #${state.day}` : "Practice";
+    $("round-label").textContent = `${mode} · Round ${state.index + 1}/${ROUNDS} · ${TIER_NAMES[s.tier - 1]}`;
     $("round-dots").innerHTML = Array.from({ length: ROUNDS }, (_, i) =>
       `<span class="dot ${i < state.index ? "done" : i === state.index ? "now" : ""}"></span>`).join("");
     $("sport-badge").textContent = `${ICON[s.sport]} ${s.sportLabel}`;
@@ -393,13 +579,19 @@
     const pts = pointsFor(km);
     state.total += pts;
     state.results.push({ stadium: s, km, pts });
+    if (state.mode === "daily") {
+      saveDailyEntry(state.day, {
+        results: state.results.map((r) => ({ id: r.stadium.id, km: Math.round(r.km * 10) / 10, pts: r.pts })),
+        done: state.results.length === ROUNDS,
+      });
+    }
 
     // Show the result card first: it takes space below the globe, the globe
     // shrinks to fit above it, and the camera then frames both pins.
     $("guess-btn").hidden = true;
     $("globe-hint").hidden = true;
-    $("score").textContent = state.total.toLocaleString();
-    $("res-points").textContent = pts.toLocaleString();
+    $("score").textContent = state.total;
+    $("res-points").textContent = pts;
     $("res-bar").style.width = "0";
     requestAnimationFrame(() => requestAnimationFrame(() => { $("res-bar").style.width = `${(pts / MAX_POINTS) * 100}%`; }));
     $("res-dist").textContent = km < 0.5 ? "Bullseye! You found it." : `${fmtKm(km)} away`;
@@ -433,6 +625,7 @@
 
   function finish() {
     toggleFullscreen(false);
+    const daily = state.mode === "daily";
     const t = state.total;
     const verdict =
       t >= 88 ? "Groundskeeper of the world. Incredible." :
@@ -440,7 +633,9 @@
       t >= 44 ? "Solid. You know your venues." :
       t >= 24 ? "Decent start. The later rounds are tough." :
       "The hard rounds got you. Try again!";
-    $("final-score").textContent = t.toLocaleString();
+    const sportLabel = SPORTS.find((s) => s.key === state.sport).label;
+    $("final-title").textContent = daily ? `Daily Challenge #${state.day}` : `Practice · ${sportLabel}`;
+    $("final-score").textContent = t;
     $("final-verdict").textContent = verdict;
     $("final-list").innerHTML = state.results.map(({ stadium: s, km, pts }, i) => `
       <li>
@@ -449,9 +644,19 @@
           <div class="fl-name">${escapeHtml(s.name)}</div>
           <div class="fl-sub">R${i + 1} · ${TIER_NAMES[s.tier - 1]} · ${ICON[s.sport]} ${escapeHtml(s.country || "")} · ${fmtKm(km)} off</div>
         </div>
-        <div class="fl-pts">${pts.toLocaleString()}</div>
+        <div class="fl-pts">${square(pts)} ${pts}</div>
       </li>`).join("");
+    $("share-block").hidden = !daily;
+    $("final-stats").hidden = true;
+    if (daily) renderStats($("final-stats"));
+    $("again-btn").textContent = daily ? "Practice" : "Play again";
     show("final");
+    tickCountdown();
+  }
+
+  function quitToMenu() {
+    toggleFullscreen(false);
+    renderMenu();
   }
 
   // ---------- events ----------
@@ -461,11 +666,14 @@
     state.sport = chip.dataset.sport;
     renderPicker();
   });
-  $("play-btn").addEventListener("click", startGame);
+  $("daily-btn").addEventListener("click", startDaily);
+  $("practice-btn").addEventListener("click", startPractice);
   $("guess-btn").addEventListener("click", submitGuess);
   $("next-btn").addEventListener("click", nextRound);
-  $("again-btn").addEventListener("click", startGame);
-  $("menu-btn").addEventListener("click", () => { renderPicker(); show("start"); });
+  $("again-btn").addEventListener("click", startPractice);
+  $("menu-btn").addEventListener("click", renderMenu);
+  $("quit-btn").addEventListener("click", quitToMenu);
+  $("share-btn").addEventListener("click", share);
   document.addEventListener("keydown", (e) => {
     if ($("game").hidden) return;
     const fs = $("photo-panel").classList.contains("fs");
@@ -482,8 +690,10 @@
 
   initViewer();
   if (!stadiums.length) {
-    $("play-btn").disabled = true;
-    $("play-btn").textContent = "No data — run scripts/build_data.py";
+    $("daily-btn").disabled = true;
+    $("practice-btn").disabled = true;
+    $("daily-desc").textContent = "No data. Run scripts/build_data.py.";
   }
-  renderPicker();
+  renderMenu();
+  setInterval(tickCountdown, 1000);
 })();

@@ -31,6 +31,18 @@ DNS for `arenalocator.lol` (at Porkbun):
 
 ## How it works
 
+- **Daily Challenge:** everyone gets the same 5 stadiums each day: one per sport, in a
+  daily-shuffled order, tiers 1→5. The puzzle is chosen by a seeded random generator
+  from the day number (#1 = 10 Sep 2026, following each player's local date), so no
+  server is needed. Each day is played once: progress is saved after every round, so
+  reloading resumes the game instead of re-rolling it. The **Share** button produces
+  spoiler-free text (score plus a colored square per round) using the phone share sheet,
+  or copies it on desktop. Played / streak / best / average stats are kept in the browser.
+- **Practice:** unlimited 5-round games, either mixed sports or a single sport.
+
+  **Note:** the daily puzzle is picked from `data/stadiums.js`, so rebuilding the data
+  changes which stadiums past and future days use. Ship data updates between days, not
+  mid-day.
 - **Data:** `data/stadiums.js` holds 100 venues each for soccer, American football,
   basketball, baseball and tennis, generated from Wikidata. Photos are hotlinked from
   Wikimedia Commons and credited on the result screen.

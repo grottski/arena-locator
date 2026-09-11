@@ -4,20 +4,56 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Arena Locator</title>
+  <meta name="description" content="See the stadium, find it on the globe. A daily sports-venue geography game.">
+  <meta property="og:title" content="Arena Locator">
+  <meta property="og:description" content="See the stadium, find it on the globe. A new daily challenge every day.">
+  <meta property="og:url" content="https://arenalocator.lol">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏟️</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Start screen -->
-  <section id="start" class="screen">
-    <div class="start-card">
+  <!-- Menu -->
+  <section id="menu" class="screen">
+    <div class="start-card menu-wrap">
       <div class="logo">ARENA<span>LOCATOR</span></div>
-      <p class="tagline">See the stadium. Find it on the globe.<br>5 rounds, each one harder than the last.</p>
-      <div class="label">Choose your sport</div>
-      <div id="sport-picker" class="chips"></div>
-      <button id="play-btn" class="btn primary big">Play</button>
+      <p class="tagline">See the stadium. Find it on the globe.</p>
+
+      <div class="card daily-card">
+        <div class="card-head">
+          <div>
+            <div class="eyebrow">Daily Challenge</div>
+            <h2 id="daily-title">#1</h2>
+          </div>
+          <div id="daily-date" class="muted"></div>
+        </div>
+        <p id="daily-desc" class="card-desc"></p>
+        <button id="daily-btn" class="btn primary big wide">Play today's</button>
+      </div>
+
+      <div id="stats" class="stats" hidden></div>
+
+      <div class="card">
+        <div class="eyebrow">Practice</div>
+        <p class="card-desc">Unlimited games. Pick a sport or mix them all.</p>
+        <div id="sport-picker" class="chips"></div>
+        <button id="practice-btn" class="btn wide">Start practice</button>
+      </div>
+
+      <details class="howto">
+        <summary>How to play</summary>
+        <ol>
+          <li>Study the stadium photo. Pinch or scroll to zoom in on signs, flags and skylines.</li>
+          <li>Tap the globe to drop your pin where you think it is, then hit <b>Guess</b>.</li>
+          <li>Closer guesses score more, up to 20 points a round and 100 per game.</li>
+          <li>Rounds get harder as you go, from famous grounds to hidden gems.</li>
+          <li>Everyone gets the same Daily Challenge. Share your score when you're done.</li>
+        </ol>
+      </details>
+
       <p class="fine">Photos from Wikimedia Commons, credited after each round.</p>
     </div>
   </section>
@@ -25,7 +61,10 @@
   <!-- Game screen -->
   <section id="game" class="screen" hidden>
     <header class="topbar">
-      <div class="logo small">ARENA<span>LOCATOR</span></div>
+      <div class="topbar-left">
+        <button id="quit-btn" class="icon-btn" title="Back to menu" aria-label="Back to menu">‹</button>
+        <div class="logo small">ARENA<span>LOCATOR</span></div>
+      </div>
       <div class="round-info">
         <div id="round-dots" class="dots"></div>
         <div id="round-label" class="round-label"></div>
@@ -80,15 +119,23 @@
   <section id="final" class="screen" hidden>
     <div class="final-card">
       <div class="logo small">ARENA<span>LOCATOR</span></div>
+      <div class="eyebrow" id="final-title"></div>
       <div class="final-score"><span id="final-score">0</span><small>/ 100</small></div>
       <div class="final-verdict" id="final-verdict"></div>
+      <div id="share-block" class="share-block" hidden>
+        <button id="share-btn" class="btn primary big wide">Share score</button>
+        <div class="next-daily">Next daily in <strong class="countdown"></strong></div>
+      </div>
       <ol id="final-list" class="final-list"></ol>
+      <div id="final-stats" class="stats" hidden></div>
       <div class="final-actions">
         <button id="again-btn" class="btn primary">Play again</button>
-        <button id="menu-btn" class="btn">Change sport</button>
+        <button id="menu-btn" class="btn">Menu</button>
       </div>
     </div>
   </section>
+
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="assets/globe.gl.min.js"></script>
   <script src="data/stadiums.js"></script>

@@ -56,7 +56,7 @@ button { font: inherit; }
 
 /* ---------- start ---------- */
 .screen { min-height: 100%; }
-#start, #final { display: grid; place-items: center; padding: 32px 18px; }
+#menu, #final { display: grid; place-items: center; padding: 32px 18px; }
 .start-card, .final-card { width: min(640px, 100%); text-align: center; }
 .tagline { color: var(--muted); font-size: 17px; margin: 18px 0 34px; }
 .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); margin-bottom: 12px; }
@@ -72,6 +72,72 @@ button { font: inherit; }
 }
 .chip.on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 .fine { color: var(--muted); font-size: 12px; margin-top: 28px; }
+
+/* ---------- menu ---------- */
+.menu-wrap { display: grid; gap: 14px; }
+.menu-wrap .tagline { margin: 12px 0 10px; }
+.menu-wrap .fine { margin-top: 6px; }
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 20px;
+  text-align: left;
+}
+.daily-card {
+  border-color: rgba(198, 244, 50, 0.35);
+  background: linear-gradient(160deg, rgba(198, 244, 50, 0.1), var(--panel) 55%);
+}
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.card h2 { font-family: var(--display); font-size: 40px; line-height: 1; margin: 4px 0 0; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); font-weight: 600; }
+.card-desc { color: var(--muted); margin: 10px 0 16px; }
+.card-desc strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.card .chips { justify-content: flex-start; margin-bottom: 16px; }
+.btn.wide { width: 100%; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stats div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 4px; text-align: center; }
+.stats strong { display: block; font-family: var(--display); font-size: 26px; line-height: 1.1; }
+.stats span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+
+.howto { text-align: left; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; }
+.howto summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.howto ol { margin: 10px 0 2px; padding-left: 20px; }
+.howto li { margin: 5px 0; }
+
+/* ---------- final extras ---------- */
+.final-card .eyebrow { margin-top: 16px; }
+.final-card .final-score { margin-top: 6px; }
+.share-block { margin: 0 0 22px; }
+.next-daily { color: var(--muted); font-size: 14px; margin-top: 10px; }
+.next-daily strong { color: var(--text); font-variant-numeric: tabular-nums; }
+#final .stats { margin-bottom: 22px; }
+
+/* ---------- topbar back button ---------- */
+.topbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.icon-btn {
+  flex: none;
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 22px; line-height: 1;
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.icon-btn:hover { background: #1f2a45; }
+
+/* ---------- toast ---------- */
+.toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  background: var(--text); color: var(--bg);
+  padding: 10px 18px; border-radius: 999px;
+  font-weight: 600; z-index: 50;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
 
 /* ---------- game ---------- */
 #game { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
