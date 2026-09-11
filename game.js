@@ -76,7 +76,12 @@
 
   // ---------- storage ----------
   function readJSON(key, fallback) {
-    try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+    try {
+      const value = JSON.parse(localStorage.getItem(key));
+      return value === null || value === undefined ? fallback : value;
+    } catch (e) {
+      return fallback;
+    }
   }
   function writeJSON(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage unavailable */ }
@@ -484,11 +489,11 @@
     const entry = dailyEntry(day);
     $("daily-title").textContent = `#${day}`;
     $("daily-date").textContent = new Date().toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
-    if (entry?.done) {
+    if (entry && entry.done) {
       const score = sum(entry.results.map((r) => r.pts));
       $("daily-desc").innerHTML = `You scored <strong>${score}/100</strong> today. Next daily in <strong class="countdown"></strong>`;
       $("daily-btn").textContent = "See results & share";
-    } else if (entry?.results?.length) {
+    } else if (entry && entry.results && entry.results.length) {
       $("daily-desc").textContent = `In progress: round ${entry.results.length + 1} of ${ROUNDS}.`;
       $("daily-btn").textContent = "Continue";
     } else {
@@ -521,12 +526,12 @@
     state.day = day;
     state.rounds = dailyRounds(day);
     // Resume a daily in progress (or show the finished one) instead of re-rolling.
-    state.results = (entry?.results || [])
+    state.results = ((entry && entry.results) || [])
       .map((r) => ({ stadium: byId.get(r.id), km: r.km, pts: r.pts }))
       .filter((r) => r.stadium);
     state.total = sum(state.results.map((r) => r.pts));
     saveRecent(state.rounds.map((s) => s.id));
-    if (entry?.done) return finish();
+    if (entry && entry.done) return finish();
     state.index = state.results.length;
     enterGame();
   }

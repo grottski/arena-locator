@@ -19,6 +19,11 @@ so reloads always show your latest edits.
 The site is hosted on GitHub Pages from the `main` branch root. Pushing to `main` redeploys
 within a minute or two. The `CNAME` file holds the custom domain.
 
+**Before every deploy, run `python3 scripts/stamp.py`.** GitHub Pages lets browsers cache
+files for 10 minutes, so without it a phone can load the new `index.html` with an old
+`game.js` and the buttons stop working. The script tags each script and stylesheet URL in
+`index.html` with a hash of the file's contents, so a changed file always gets a new URL.
+
 DNS for `arenalocator.lol` (at Porkbun):
 
 | Type | Host | Answer |
