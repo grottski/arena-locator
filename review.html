@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Arena Locator · Photo Review</title>
+  <style>
+    :root { --bg:#070b14; --panel:#0f1626; --line:rgba(255,255,255,.09); --text:#eef2f8; --muted:#8a96ad; --accent:#c6f432; --bad:#ff5d73; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,sans-serif; }
+    header { position:sticky; top:0; z-index:2; background:rgba(7,11,20,.95); border-bottom:1px solid var(--line); padding:12px 18px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+    h1 { font-size:17px; margin:0 12px 0 0; }
+    select, button { font:inherit; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 10px; }
+    button.primary { background:var(--accent); color:#0b1200; border-color:transparent; font-weight:600; cursor:pointer; }
+    .muted { color:var(--muted); }
+    .help { padding:10px 18px; color:var(--muted); font-size:13px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; padding:0 18px 40px; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; overflow:hidden; cursor:pointer; position:relative; }
+    .card img { width:100%; aspect-ratio:3/2; object-fit:cover; display:block; background:#000; }
+    .card .info { padding:8px 10px; }
+    .card .name { font-weight:600; }
+    .card .sub { font-size:12px; color:var(--muted); }
+    .card.excluded { border-color:var(--bad); }
+    .card.excluded img { opacity:.25; filter:grayscale(1); }
+    .card.excluded::after { content:"EXCLUDED"; position:absolute; top:10px; left:10px; background:var(--bad); color:#fff; font-size:11px; font-weight:700; padding:3px 7px; border-radius:5px; }
+    .tier { position:absolute; top:10px; right:10px; background:rgba(7,11,20,.8); font-size:11px; padding:3px 7px; border-radius:5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Photo Review</h1>
+    <select id="sport"></select>
+    <select id="tier">
+      <option value="0">All tiers</option>
+      <option value="1">Tier 1 · Warm-up</option><option value="2">Tier 2 · Easy</option>
+      <option value="3">Tier 3 · Medium</option><option value="4">Tier 4 · Hard</option><option value="5">Tier 5 · Expert</option>
+    </select>
+    <span id="count" class="muted"></span>
+    <span style="flex:1"></span>
+    <button id="copy" class="primary">Copy excluded IDs</button>
+  </header>
+  <p class="help">Click a card to exclude it (bad photo, wrong sport, name or logo visible, closed venue). Then press <b>Copy excluded IDs</b>, paste the list into <code>data/overrides.json</code> under <code>"exclude"</code>, and run <code>python3 scripts/build_data.py</code>. The next stadium in line fills each gap.</p>
+  <div id="grid" class="grid"></div>
+
+  <script src="data/stadiums.js"></script>
+  <script>
+    const KEY = "arena-locator:review-excluded";
+    const all = window.STADIUMS || [];
+    let excluded;
+    try { excluded = new Set(JSON.parse(localStorage.getItem(KEY) || "[]")); } catch { excluded = new Set(); }
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...excluded])); } catch {} };
+    const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+    const sports = [...new Map(all.map((s) => [s.sport, s.sportLabel])).entries()];
+    document.getElementById("sport").innerHTML = `<option value="">All sports</option>` + sports.map(([k, l]) => `<option value="${k}">${l}</option>`).join("");
+
+    function render() {
+      const sport = document.getElementById("sport").value;
+      const tier = +document.getElementById("tier").value;
+      const list = all.filter((s) => (!sport || s.sport === sport) && (!tier || s.tier === tier));
+      document.getElementById("count").textContent = `${list.length} shown · ${excluded.size} excluded`;
+      document.getElementById("grid").innerHTML = list.map((s) => `
+        <div class="card ${excluded.has(s.id) ? "excluded" : ""}" data-id="${s.id}">
+          <img loading="lazy" src="${esc(s.photo)}" alt="">
+          <span class="tier">${esc(s.sportLabel)} · T${s.tier} · #${s.rank}</span>
+          <div class="info">
+            <div class="name">${esc(s.name)}</div>
+            <div class="sub">${esc([s.place, s.country].filter(Boolean).join(", "))} · ${s.fame} wikis · ${s.id}</div>
+          </div>
+        </div>`).join("");
+    }
+
+    document.getElementById("grid").addEventListener("click", (e) => {
+      const card = e.target.closest(".card");
+      if (!card) return;
+      const id = card.dataset.id;
+      excluded.has(id) ? excluded.delete(id) : excluded.add(id);
+      save();
+      card.classList.toggle("excluded");
+      document.getElementById("count").textContent = document.getElementById("count").textContent.replace(/\d+ excluded/, `${excluded.size} excluded`);
+    });
+    document.getElementById("sport").addEventListener("change", render);
+    document.getElementById("tier").addEventListener("change", render);
+    document.getElementById("copy").addEventListener("click", async () => {
+      const text = JSON.stringify([...excluded]);
+      try { await navigator.clipboard.writeText(text); document.getElementById("copy").textContent = "Copied!"; }
+      catch { prompt("Copy these IDs:", text); }
+      setTimeout(() => { document.getElementById("copy").textContent = "Copy excluded IDs"; }, 1500);
+    });
+    render();
+  </script>
+</body>
+</html>
